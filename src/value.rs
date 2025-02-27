@@ -1,9 +1,10 @@
+use core::panic;
 use std::{ops::{Add, Mul}};
 
 
 struct Value {
     data: f64,
-    children: Vec<Option<Box<Value>>>,
+    children: Vec<Value>,
     label: String,
     op: String,
     grad: f64
@@ -17,7 +18,7 @@ impl Value {
             children: vec![],
             grad: 0.0,
             label: String::new(),
-            op: String::new()
+            op: String::new(),
         }
     }
 
@@ -29,25 +30,48 @@ impl Value {
     fn tanh(self) -> Value {
         let x = self.data;
         let t = (f64::exp(2.0*x) - 1.0)/(f64::exp(2.0*x) + 1.0);
-        let out =  Value::new(self.data);
 
-        out
+        Value::new(self.data)
 
     }
 
     fn backward_tanh(mut self, out_grad: f64){
+        //leaf node
+        if self.children.len() == 0 {
+            return
+        }
+
         let t = self.calculate_tanh(out_grad);
         self.grad = (1.0 - t.powf(2.0)) * out_grad;
     }
 
-    fn backward_add(mut self, out_grad: f64) -> f64 {
-        self.data = 1.0 * out_grad;
-        1.0 * out_grad
+    fn backward_add(mut self, out_grad: f64) {
+        //leaf node
+        if self.children.len() == 0 {
+            return;
+        }
+
+        self.grad += out_grad;
+
+        match self.children.get_mut(1) {
+            Some(other) => other.grad += out_grad,
+            None => panic!("Was not possible to get 'other' value")
+        };
     }
 
-    fn backward_mul(mut self, other_grad: f64, out_grad: f64) -> f64 {
-        self.grad = other_grad * out_grad;
-        self.grad * out_grad
+    fn backward_mul(mut self, out_grad: f64) {
+        //leaf node
+        if self.children.len() == 0 {
+            return;
+        }
+
+        let other = match self.children.get_mut(1) {
+            Some(other) => other,
+            None => panic!("Was not possible to get 'other' value")
+        };
+
+        self.grad = other.grad * out_grad;
+        other.grad = self.grad * out_grad;
     }
 
 }
@@ -57,13 +81,10 @@ impl Add for Value{
 
         let mut out = Value::new(self.data + other.data);
         
-
-        out.children = vec![Some(Box::new(self)), Some(Box::new(other))];
+        out.children = vec![self, other];
         out.op = String::from("+");
 
         out
-
-
     }
 
 
@@ -77,7 +98,7 @@ impl Mul for Value {
     fn mul(self, other: Self) -> Self::Output {
             let mut out = Value::new(self.data * other.data);
 
-        out.children = vec![Some(Box::new(self)), Some(Box::new(other))];
+        out.children = vec![self, other];
         out.op = String::from("*");
         out.label = String::new();
 
